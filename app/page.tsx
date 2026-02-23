@@ -71,86 +71,91 @@ export default function GivebyLandingPage() {
 
       <section className="max-w-6xl mx-auto px-4 py-16">
         <div className="text-center mb-12">
-          <h2 className="text-4xl md:text-5xl font-extrabold text-[#1A2B48] mb-4">
-            Join the Movement
+          <h2 className="text-5xl md:text-6xl font-extrabold text-[#1A2B48] mb-6 tracking-tight">
+            Every Purchase Powers a Purpose.
           </h2>
-          <p className="text-lg text-[#1A2B48] opacity-90">
-            Split your spare change with charities you care about with a 
-            <span className="text-[#2ECC71] font-bold mx-1">50/50 split</span>.
+          <p className="text-xl text-[#1A2B48] opacity-90 leading-relaxed max-w-3xl mx-auto">
+            Reclaiming retail profits for the people. Givebly splits shopping commissions <span className="text-[#2ECC71] font-bold">50/50</span>—funding the Australian charities you care about, while putting cash back in your pocket for cost-of-living relief.
           </p>
         </div>
 
-        <div className="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-8 mb-20 border border-gray-100">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-[#1A2B48] font-bold mb-1.5 text-sm">First Name</label>
-              <input
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#2ECC71] outline-none transition"
-              />
+        <div className="max-w-md mx-auto mb-20">
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+            
+            <div className="flex items-center justify-center gap-2 mb-8 bg-green-50/50 py-2.5 rounded-lg border border-green-100">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#2ECC71] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-[#2ECC71]"></span>
+              </span>
+              <p className="text-sm font-semibold text-[#1A2B48]">Join <span className="text-[#2ECC71]">100+</span> Australians claiming their impact</p>
             </div>
-            <div>
-              <label className="block text-[#1A2B48] font-bold mb-1.5 text-sm">Email Address</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#2ECC71] outline-none transition"
-              />
-            </div>
-            <div>
-              <label className="block text-[#1A2B48] font-bold mb-1.5 text-sm">Postcode</label>
-              <input
-                type="text"
-                value={postcode}
-                onChange={(e) => setPostcode(e.target.value.slice(0, 4))}
-                maxLength={4}
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#2ECC71] outline-none transition"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={status === 'loading'}
-              className="w-full bg-[#2ECC71] text-white font-bold py-4 rounded-xl hover:bg-[#27AE60] transform transition active:scale-95 shadow-lg disabled:opacity-50"
-            >
-              {status === 'loading' ? 'Joining...' : 'Join Waitlist'}
-            </button>
-          </form>
 
-          {message && (
-            <p className={status === "success" ? "mt-6 text-center font-bold text-[#2ECC71]" : "mt-6 text-center font-bold text-red-500"}>
-              {message}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <h3 className="text-2xl font-bold text-[#1A2B48] mb-10 text-center">Supporting Charities</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {charityData.map((charity) => (
-              <div
-                key={charity.name}
-                className="group bg-white rounded-2xl shadow-sm p-6 flex items-center justify-center h-32 border border-gray-50 transition-all duration-300 hover:scale-105 hover:-translate-y-1.5 hover:shadow-2xl hover:border-[#2ECC71]/20 cursor-default"
-              >
-                <img
-                  src={"/logos/" + charity.filename}
-                  alt={charity.name}
-                  className="object-contain max-h-16 transition-transform duration-300 group-hover:scale-110"
+            <h3 className="text-2xl font-bold text-[#1A2B48] text-center mb-6">Join the Movement</h3>
+            
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="block text-[#1A2B48] font-bold mb-1.5 text-sm">First Name</label>
+                <input
+                  type="text"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#2ECC71] outline-none transition"
                 />
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
+              <div>
+                <label className="block text-[#1A2B48] font-bold mb-1.5 text-sm">Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#2ECC71] outline-none transition"
+                />
+              </div>
+              <div>
+                <label className="block text-[#1A2B48] font-bold mb-1.5 text-sm">Postcode</label>
+                <input
+                  type="text"
+                  value={postcode}
+                  onChange={(e) => setPostcode(e.target.value.slice(0, 4))}
+                  maxLength={4}
+                  required
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#2ECC71] outline-none transition"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={status === 'loading'}
+                className="w-full bg-[#2ECC71] text-white font-bold py-4 rounded-xl hover:bg-[#27AE60] transform transition active:scale-95 shadow-lg disabled:opacity-50 mt-2"
+              >
+                {status === 'loading' ? 'Joining...' : 'Join Waitlist'}
+              </button>
+            </form>
 
-      <footer className="bg-[#1A2B48] text-white py-10 mt-20 text-center">
-        <p className="opacity-70 text-sm">&copy; 2026 Givebly. Every purchase powers a purpose.</p>
-      </footer>
-    </div>
-  );
-}
+            {message && (
+              <p className={status === "success" ? "mt-6 text-center font-bold text-[#2ECC71]" : "mt-6 text-center font-bold text-red-500"}>
+                {message}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-6 mt-8 text-[#1A2B48] opacity-80">
+                        <div className="flex items-center gap-2">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span>Australian Charities</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span>Privacy Protected</span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              );
+            }
