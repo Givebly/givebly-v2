@@ -27,21 +27,31 @@ export default function DigitalVault() {
       const name = user.user_metadata?.full_name?.split(' ')[0] || 'User';
       setUserName(name);
 
-      // --- CALCULATE POINTS ---
-      let earnedPoints = 0;
+      // --- CALCULATE POINTS MASTER FORMULA ---
+      let earnedCoursePoints = 0;
+      let earnedBonusPoints = 0;
       let spentPoints = 0;
 
+      // 1. Course Points
       const { data: progressData } = await supabase.from('user_course_progress').select('course_id').eq('user_id', user.id);
       if (progressData && progressData.length > 0) {
         const completedCourseIds = progressData.map(p => p.course_id);
         const { data: courseData } = await supabase.from('courses').select('reward_points').in('id', completedCourseIds);
-        if (courseData) earnedPoints = courseData.reduce((sum, course) => sum + (course.reward_points || 0), 0);
+        if (courseData) earnedCoursePoints = courseData.reduce((sum, course) => sum + (course.reward_points || 0), 0);
       }
 
+      // 2. Gamification Bonus Points (NEW!)
+      const { data: transactionData } = await supabase.from('point_transactions').select('points_awarded').eq('user_id', user.id);
+      if (transactionData) {
+        earnedBonusPoints = transactionData.reduce((sum, tx) => sum + (tx.points_awarded || 0), 0);
+      }
+
+      // 3. Spent Points
       const { data: redemptionData } = await supabase.from('redemptions').select('points_cost').eq('user_id', user.id);
       if (redemptionData) spentPoints = redemptionData.reduce((sum, item) => sum + (item.points_cost || 0), 0);
 
-      setAvailablePoints(earnedPoints - spentPoints);
+      // 4. The Final Calculation
+      setAvailablePoints((earnedCoursePoints + earnedBonusPoints) - spentPoints);
 
       // --- FETCH INVENTORY ---
       const { data: inventoryData } = await supabase
@@ -70,7 +80,6 @@ export default function DigitalVault() {
 
     setIsRedeeming(item.id);
 
-    // Write to the Redemptions Ledger (Now passing the email for the Admin Panel!)
     const { error } = await supabase.from('redemptions').insert([{
       user_id: userId,
       user_email: userEmail,
@@ -100,7 +109,6 @@ export default function DigitalVault() {
   return (
     <div className="min-h-screen bg-[#F8F9FA] pb-20 overflow-x-hidden">
       
-      {/* GLOBAL STYLES TO HIDE SCROLLBARS */}
       <style dangerouslySetInnerHTML={{__html: `
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -121,7 +129,6 @@ export default function DigitalVault() {
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         
-        {/* HERO BANNER - GAMIFIED */}
         <div className="bg-gradient-to-r from-indigo-900 to-purple-900 rounded-3xl shadow-xl p-8 mb-10 text-white relative border border-purple-800">
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
             <div>
@@ -136,7 +143,6 @@ export default function DigitalVault() {
           </div>
         </div>
 
-        {/* TIER 1: STARTER REWARDS */}
         {tier1.length > 0 && (
           <div className="mb-12 relative">
             <div className="flex justify-between items-end mb-4">
@@ -151,7 +157,6 @@ export default function DigitalVault() {
           </div>
         )}
 
-        {/* TIER 2: PREMIUM REWARDS */}
         {tier2.length > 0 && (
           <div className="mb-12 relative">
             <div className="flex justify-between items-end mb-4">
@@ -166,7 +171,6 @@ export default function DigitalVault() {
           </div>
         )}
 
-        {/* TIER 3: ELITE REWARDS */}
         {tier3.length > 0 && (
           <div className="mb-12 relative">
             <div className="flex justify-between items-end mb-4">
@@ -186,14 +190,12 @@ export default function DigitalVault() {
   );
 }
 
-// Reusable Card Component for the horizontal rows
 function RewardCard({ item, availablePoints, handleRedeem, isRedeeming }: any) {
   const isLocked = availablePoints < item.points_cost;
   
   return (
     <div className={`min-w-[280px] max-w-[280px] rounded-2xl shadow-md border ${isLocked ? 'border-gray-200 bg-white' : 'border-gray-200 bg-white hover:-translate-y-1 hover:shadow-xl'} p-5 flex flex-col transition-all snap-start shrink-0 relative overflow-hidden group`}>
       
-      {/* Progress bar visual indicating how close they are */}
       {isLocked && (
         <div className="absolute top-0 left-0 w-full h-1 bg-gray-100">
           <div className="h-full bg-yellow-400" style={{ width: `${Math.min((availablePoints / item.points_cost) * 100, 100)}%` }}></div>
