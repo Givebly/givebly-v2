@@ -84,50 +84,63 @@ export default function UserDashboard() {
   const [userName, setUserName] = useState('');
   const [walletBalance, setWalletBalance] = useState(0);
   const [availablePoints, setAvailablePoints] = useState(0);
+  const [pendingPoints, setPendingPoints] = useState(0); // THE ESCROW BALANCE
   const [isLoading, setIsLoading] = useState(true);
   
-  // GAMIFICATION STATE
+  // UI STATES
   const [isSharing, setIsSharing] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [devLoading, setDevLoading] = useState(false);
 
-  // FETCH DATA
   useEffect(() => {
-    async function initializeDashboard() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/login');
-        return;
-      }
-      setUserId(user.id);
-      const name = user.user_metadata?.full_name?.split(' ')[0] || 'User';
-      setUserName(name);
-      setWalletBalance(0);
-
-      // Fetch dynamic points for the header
-      let earnedCoursePoints = 0;
-      let earnedBonusPoints = 0;
-      let spentPoints = 0;
-
-      const { data: progressData } = await supabase.from('user_course_progress').select('course_id').eq('user_id', user.id);
-      if (progressData && progressData.length > 0) {
-        const completedCourseIds = progressData.map(p => p.course_id);
-        const { data: courseData } = await supabase.from('courses').select('reward_points').in('id', completedCourseIds);
-        if (courseData) earnedCoursePoints = courseData.reduce((sum, course) => sum + (course.reward_points || 0), 0);
-      }
-      const { data: transactionData } = await supabase.from('point_transactions').select('points_awarded').eq('user_id', user.id);
-      if (transactionData) earnedBonusPoints = transactionData.reduce((sum, tx) => sum + (tx.points_awarded || 0), 0);
-      
-      const { data: redemptionData } = await supabase.from('redemptions').select('points_cost').eq('user_id', user.id);
-      if (redemptionData) spentPoints = redemptionData.reduce((sum, item) => sum + (item.points_cost || 0), 0);
-
-      setAvailablePoints((earnedCoursePoints + earnedBonusPoints) - spentPoints);
-
-      const { data: storeData } = await supabase.from('stores').select('*');
-      if (storeData) setLiveStores(storeData);
-      setIsLoading(false);
-    }
-    initializeDashboard();
+    fetchDashboardData();
   }, [router]);
+
+  async function fetchDashboardData() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    setUserId(user.id);
+    const name = user.user_metadata?.full_name?.split(' ')[0] || 'User';
+    setUserName(name);
+    setWalletBalance(0);
+
+    // 1. CALCULATE AVAILABLE BALANCE
+    let earnedPoints = 0;
+    let spentPoints = 0;
+
+    const { data: progressData } = await supabase.from('user_course_progress').select('course_id').eq('user_id', user.id);
+    if (progressData && progressData.length > 0) {
+      const courseIds = progressData.map(p => p.course_id);
+      const { data: courseData } = await supabase.from('courses').select('reward_points').in('id', courseIds);
+      if (courseData) earnedPoints += courseData.reduce((sum, c) => sum + (c.reward_points || 0), 0);
+    }
+    const { data: txData } = await supabase.from('point_transactions').select('points_awarded').eq('user_id', user.id);
+    if (txData) earnedPoints += txData.reduce((sum, tx) => sum + (tx.points_awarded || 0), 0);
+    
+    const { data: redemptions } = await supabase.from('redemptions').select('points_cost').eq('user_id', user.id);
+    if (redemptions) spentPoints += redemptions.reduce((sum, r) => sum + (r.points_cost || 0), 0);
+
+    setAvailablePoints(earnedPoints - spentPoints);
+
+    // 2. FETCH PENDING ESCROW REFERRALS
+    const { data: pendingRefs } = await supabase
+      .from('referrals')
+      .select('*')
+      .eq('referrer_username', name.toLowerCase())
+      .eq('status', 'pending');
+    
+    if (pendingRefs) {
+      // 1000 points per pending friend
+      setPendingPoints(pendingRefs.length * 1000); 
+    }
+
+    const { data: storeData } = await supabase.from('stores').select('*');
+    if (storeData) setLiveStores(storeData);
+    setIsLoading(false);
+  }
 
   const handleSocialShare = async () => {
     if (!userId) return;
@@ -137,13 +150,48 @@ export default function UserDashboard() {
         { user_id: userId, action_type: 'social_share', points_awarded: 200, description: 'Shared Givebly on Social Media' }
       ]);
       if (!error) {
-        setAvailablePoints(prev => prev + 200);
+        fetchDashboardData();
         alert('🪙 Awesome! 200 Impact Points have been added to your Vault!');
-      } else {
-        alert('Oops, something went wrong: ' + error.message);
       }
       setIsSharing(false);
     }, 1000);
+  };
+
+  // --- ESCROW DEV TOOLS (FOR TESTING) ---
+  const simulateFriendSignup = async () => {
+    setDevLoading(true);
+    // Fake a row in the referrals table
+    await supabase.from('referrals').insert([{
+      referrer_username: userName.toLowerCase(),
+      referee_id: '00000000-0000-0000-0000-000000000000', // Fake ID
+      status: 'pending'
+    }]);
+    await fetchDashboardData();
+    setDevLoading(false);
+    alert("Friend successfully 'signed up'! Check your pending escrow balance.");
+  };
+
+  const simulateFriendShop = async () => {
+    setDevLoading(true);
+    // Find one pending referral and unlock it
+    const { data: pendingRefs } = await supabase.from('referrals').select('id').eq('referrer_username', userName.toLowerCase()).eq('status', 'pending').limit(1);
+    
+    if (pendingRefs && pendingRefs.length > 0) {
+      // 1. Mark it complete
+      await supabase.from('referrals').update({ status: 'unlocked' }).eq('id', pendingRefs[0].id);
+      // 2. Mint the points into transactions!
+      await supabase.from('point_transactions').insert([{
+        user_id: userId,
+        action_type: 'referral_bonus',
+        points_awarded: 1000,
+        description: 'Referral Unlocked: Friend completed first shop!'
+      }]);
+      await fetchDashboardData();
+      alert("🎉 BOOM! Your friend made a purchase. 1,000 Points moved from Escrow to your Live Vault!");
+    } else {
+      alert("You don't have any pending referrals! Simulate a signup first.");
+    }
+    setDevLoading(false);
   };
 
   if (isLoading) return <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center font-bold text-[#1A2B48]">Loading dashboard...</div>;
@@ -190,13 +238,23 @@ export default function UserDashboard() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4 w-1/3 justify-end">
-              <Link href="/rewards" className="hidden md:flex items-center gap-1.5 bg-yellow-400/10 text-yellow-400 hover:bg-yellow-400/20 px-3 py-1.5 rounded-full transition font-black text-sm border border-yellow-400/30 shadow-sm">
-                🪙 {availablePoints} PTS
-              </Link>
+           <div className="flex items-center gap-4 w-auto md:w-1/3 justify-end">
+              
+              {/* PREMIUM STACKED WALLET */}
+              <div className="hidden md:flex flex-col items-end justify-center">
+                <Link href="/rewards" className="flex items-center gap-1.5 bg-yellow-400/10 text-yellow-400 hover:bg-yellow-400/20 px-3 py-1.5 rounded-full transition font-black text-sm border border-yellow-400/30 shadow-sm whitespace-nowrap">
+                  <span className="text-lg leading-none drop-shadow-md">🪙</span> {availablePoints} PTS
+                </Link>
+                {pendingPoints > 0 && (
+                  <div className="flex items-center gap-1 text-gray-400 mt-1 px-2 font-bold text-xs cursor-help whitespace-nowrap" title="Unlocks when your friend shops!">
+                    ⏳ {pendingPoints} Pending
+                  </div>
+                )}
+              </div>
+              
               <span className="text-white/20 hidden md:block">|</span>
-              <span className="text-sm font-semibold hidden md:block text-gray-200">Welcome, {userName}</span>
-              <div className="h-10 w-10 rounded-full bg-[#2ECC71] text-[#1A2B48] flex items-center justify-center font-extrabold shadow-md cursor-pointer border-2 border-[#1A2B48] relative">
+              <span className="text-sm font-semibold hidden md:block text-gray-200 whitespace-nowrap">Welcome, {userName}</span>
+              <div className="h-10 w-10 shrink-0 rounded-full bg-[#2ECC71] text-[#1A2B48] flex items-center justify-center font-extrabold shadow-md cursor-pointer border-2 border-[#1A2B48] relative">
                 {userName ? userName.charAt(0).toUpperCase() : 'U'}
               </div>
             </div>
@@ -344,7 +402,7 @@ export default function UserDashboard() {
           </div>
         </div>
 
-        {/* --- THE UPGRADED GAMIFICATION ACTION HUBS --- */}
+        {/* --- GAMIFICATION ACTION HUBS WITH ESCROW DATA --- */}
         <div className="mb-2 mt-8">
            <h3 className="text-xl font-black text-[#1A2B48] flex items-center gap-2">
              <span className="text-2xl drop-shadow-md">🪙</span> Farm Impact Points
@@ -370,7 +428,7 @@ export default function UserDashboard() {
             </div>
           </Link>
 
-          {/* Action 2: Refer & Earn (1000 / 1000) */}
+          {/* Action 2: Refer & Earn (1000 / 1000 ESCROW SYSTEM) */}
           <div className="bg-[#1A2B48] rounded-xl shadow-lg p-6 relative hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col overflow-hidden group">
             <div className="absolute top-0 right-0 w-32 h-32 bg-[#2ECC71]/20 rounded-bl-full -z-10 group-hover:scale-110 transition-transform"></div>
             <div className="flex justify-between items-start mb-2">
@@ -379,10 +437,19 @@ export default function UserDashboard() {
                 1000 🪙
               </span>
             </div>
-            <h4 className="text-lg font-black text-white mb-2 leading-tight">Invite a Friend</h4>
-            <p className="text-xs font-medium text-gray-300 mb-4 flex-1">You <strong className="text-[#2ECC71]">both</strong> get 1,000 pending points. Unlocks when they make their first shop!</p>
+            <h4 className="text-lg font-black text-white mb-1 leading-tight">Invite a Friend</h4>
             
-            <div className="flex gap-2 mb-3">
+            {/* ESCROW TRACKER DISPLAY */}
+            {pendingPoints > 0 ? (
+              <div className="bg-white/10 border border-yellow-400/30 rounded-lg p-2 mb-3">
+                <p className="text-xs text-yellow-400 font-bold mb-1">⏳ {pendingPoints} PTS Pending in Escrow!</p>
+                <p className="text-[10px] text-gray-300 leading-tight">Remind your friends to make their first shop so these unlock into your vault.</p>
+              </div>
+            ) : (
+              <p className="text-xs font-medium text-gray-300 mb-4 flex-1">You <strong className="text-[#2ECC71]">both</strong> get 1,000 pending points. Unlocks when they make their first shop!</p>
+            )}
+            
+            <div className="flex gap-2 mb-3 mt-auto">
               <button onClick={() => setShowQR(!showQR)} className="flex-1 bg-white/10 hover:bg-white/20 text-white text-xs font-bold py-2 rounded-lg transition border border-white/20 flex items-center justify-center gap-1">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
                 Show QR
@@ -390,14 +457,20 @@ export default function UserDashboard() {
               <div className="flex gap-2">
                 <div className="h-8 w-8 bg-[#1877F2] rounded-lg flex items-center justify-center text-white font-bold cursor-pointer hover:opacity-80 transition">f</div>
                 <div className="h-8 w-8 bg-[#000000] rounded-lg flex items-center justify-center text-white font-bold cursor-pointer hover:opacity-80 transition">𝕏</div>
-                <div className="h-8 w-8 bg-[#0A66C2] rounded-lg flex items-center justify-center text-white font-bold cursor-pointer hover:opacity-80 transition">in</div>
               </div>
             </div>
             
-            <div className="bg-black/40 rounded-lg py-2 px-3 flex justify-between items-center cursor-pointer hover:bg-black/60 shadow-inner border border-white/10">
+            <div className="bg-black/40 rounded-lg py-2 px-3 flex justify-between items-center cursor-pointer hover:bg-black/60 shadow-inner border border-white/10 mb-2">
               <span className="font-mono text-xs text-gray-300">givebly.com/join/{userName.toLowerCase() || 'user'}</span>
               <span className="text-[10px] font-bold uppercase text-[#2ECC71]">Copy</span>
             </div>
+
+            {/* DEV TOOLS TO TEST THE ESCROW LOGIC */}
+            <div className="flex gap-2 mt-2 pt-2 border-t border-white/10">
+              <button onClick={simulateFriendSignup} disabled={devLoading} className="flex-1 bg-blue-500/20 text-blue-300 text-[9px] font-bold py-1 rounded hover:bg-blue-500/40">1. Fake Signup</button>
+              <button onClick={simulateFriendShop} disabled={devLoading} className="flex-1 bg-green-500/20 text-green-300 text-[9px] font-bold py-1 rounded hover:bg-green-500/40">2. Fake Shop</button>
+            </div>
+
           </div>
 
           {/* Action 3: Share & Earn */}
